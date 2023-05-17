@@ -42,7 +42,9 @@ def add_liquidity_view(request):
             # Get transaction receipt
             tx_receipt = web3.eth.waitForTransactionReceipt(tx_hash)
             # ... Process the transaction receipt as needed
-
+            contract_address = tx_receipt['contractAddress']
+            pool.contract_address = contract_address
+            pool.save()
             # Create a LiquidityPool object and save it to the database
             liquidity_pool = LiquidityPool.objects.create(provider=provider, amount1=amount1, amount2=amount2)
             liquidity_pool.save()
@@ -52,21 +54,9 @@ def add_liquidity_view(request):
         form = AddLiquidityForm()
 
     return render(request, 'add_liquidity.html', {'form': form})
-
-def deploy_contract_view(request):
-    if request.method == 'POST':
-        form = DeployContractForm(request.POST)
-        if form.is_valid():
-            # Connect to Infura
-            w3 = Web3(Web3.HTTPProvider('https://eth-sepolia.g.alchemy.com/v2/eG1gg2c2gOFJmlaRLtLxMNu-xJKh-1CH'))
-
-            # Get account details from form
-            private_key = form.cleaned_data['0f87228fa664758769fbc29525a285035b27428837cfc8ceb882c6f3d3a6dd2b']
-            account = form.cleaned_data['0x705c860B5f62A43974582E328c926db5f4a17b08']
-
-            # Define the contract source code
-            contract_source_code = """
-            pragma solidity ^0.8.9;
+def get_contract_data(request):
+    contract_source_code = """
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -139,57 +129,23 @@ uint256 amountOut = numerator.div(denominator);
 require(amountOut > 0, "Insufficient output amount");
 return amountOut;
 }
-}
+}    """
+    compiled_sol = compile_source(contract_source_code)
+    contract_id, contract_interface = compiled_sol.popitem()
 
-            """
+    # Contract bytecode
+    bytecode = contract_interface['bin']
 
-            # Compile the contract
-            compiled_sol = compile_source(contract_source_code)
-            contract_id, contract_interface = compiled_sol.popitem()
+    # Constructor arguments
+    # Ensure they are properly formatted for your contract
+    constructor_args = []
 
-            # Get the ABI from the contract interface
-            abi = contract_interface['abi']
+    return JsonResponse({
+        'bytecode': bytecode,
+        'constructorArgs': constructor_args,
+    })
 
-            # Save the ABI to a JSON file
-            file_dir = os.path.dirname(os.path.realpath('__file__'))
-            file_name = os.path.join(file_dir, 'contract_abi.json')
 
-            try:
-                with open(file_name, 'w') as f:
-                    json.dump(abi, f)
-                print(f'ABI saved to {file_name}')
-            except Exception as e:
-                print(f'Failed to save ABI: {e}')
-
-            # Get transaction details
-            nonce = w3.eth.getTransactionCount(account)
-            gas_estimate = w3.eth.estimateGas({'data': contract_interface['bin']})
-            transaction = {
-                'to': '',  # Leave empty to create a new contract
-                'value': 0,  # No ether is being sent
-                'gas': gas_estimate,
-                'gasPrice': w3.eth.gasPrice,
-                'nonce': nonce,
-                'data': contract_interface['bin'],
-                'chainId': 1  # Mainnet
-            }
-
-            # Sign the transaction
-            signed = Account.sign_transaction(transaction, private_key)
-
-            # Send the transaction
-            try:
-                tx_hash = w3.eth.sendRawTransaction(signed.rawTransaction)
-            except ValueError as err:
-                print(f"Error sending transaction: {err}")
-                return HttpResponse("Error sending transaction", status=500)
-
-            # Get transaction receipt to get contract address
-            tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
-            contract_address = tx_receipt['contractAddress']
-            # Print the contract address
-            print(f"Contract deployed at {contract_address}")
-            return redirect('deploy_success')  # or wherever you want to redirect on success
 
 def filter_tokens(request):
     search_query = request.GET.get('search', '')
@@ -211,6 +167,7 @@ def pool(request):
         pool_data['amount1'] = get_balance(pool.token1, pool.provider.address)
         pool_data['token2'] = pool.token2
         pool_data['amount2'] = get_balance(pool.token2, pool.provider.address)
+        pool_data['contract_address'] = pool.contract_address
 
         pools.append(pool_data)
 
