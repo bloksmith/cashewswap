@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Pool</h1>
+    <div>
+        <h2>Add Liquidity</h2>
+        <form method="post" action="{% url 'dex_app:add_liquidity' %}">
+            {% csrf_token %}
+            <label for="amount1">Amount of Token 1:</label>
+            <input type="number" id="amount1" name="amount1" step="any" required>
+            <br>
+            <label for="amount2">Amount of Token 2:</label>
+            <input type="number" id="amount2" name="amount2" step="any" required>
+            <br>
+            <button type="submit">Add Liquidity</button>
+        </form>
+    </div>
+
+    <hr>
+
+    {% for pool in pools %}
+        <div>
+            <h2>{{ pool.provider.username }}</h2>
+            <p>{{ pool.token1 }}: {{ pool.amount1 }}</p>
+            <p>{{ pool.token2 }}: {{ pool.amount2 }}</p>
+
+            <h3>Swap {{ pool.token1 }} for {{ pool.token2 }}</h3>
+            <form method="post" action="{% url 'dex_app:swap_1_for_2' %}">
+                {% csrf_token %}
+                <label for="amountIn">Amount of {{ pool.token1 }} to Swap:</label>
+                <input type="number" id="amountIn" name="amountIn" step="any" required>
+                <br>
+                <label for="minAmountOut">Minimum Amount of {{ pool.token2 }} to Receive:</label>
+                <input type="number" id="minAmountOut" name="minAmountOut" step="any" required>
+                <br>
+                <button type="submit">Swap</button>
+            </form>
+
+            <h3>Swap {{ pool.token2 }} for {{ pool.token1 }}</h3>
+            <form method="post" action="{% url 'dex_app:swap_2_for_1' %}">
+                {% csrf_token %}
+                <label for="amountIn">Amount of {{ pool.token2 }} to Swap:</label>
+                <input type="number" id="amountIn" name="amountIn" step="any" required>
+                <br>
+                <label for="minAmountOut">Minimum Amount of {{ pool.token1 }} to Receive:</label>
+                <input type="number" id="minAmountOut" name="minAmountOut" step="any" required>
+                <br>
+                <button type="submit">Swap</button>
+            </form>
+        </div>
+
+        <hr>
+    {% endfor %}
+{% endblock %}
